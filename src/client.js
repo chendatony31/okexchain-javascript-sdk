@@ -44,14 +44,16 @@ export class OKEXChainClient {
     /**
      * @param {string} url
      * @param {string} chainId
+     * @param {object} signer
      */
-    constructor(url, chainId) {
+    constructor(url, chainId, signer) {
         if (!url) {
             throw new Error("null url")
         }
         this.httpClient = new HttpProxy(url)
         this.mode = mode
         this.chainId = chainId || defaultChainId
+        this.signer = signer || null
     }
 
     /**
@@ -71,6 +73,20 @@ export class OKEXChainClient {
     }
 
     /**
+     * set the address
+     * @param {string} address
+     */
+    async setAddress(address) {
+        if (address !== this.address) {
+            this.address = address;
+            const data = await this.getAccount(address);
+            this.account_number = this.getAccountNumberFromAccountInfo(data);
+        }
+       
+        return this
+    }
+
+    /**
      * @param {string} privateKey
      * @return {OKEXChainClient}
      */
@@ -82,7 +98,7 @@ export class OKEXChainClient {
             this.privateKey = privateKey
             this.address = address
             const data = await this.getAccount(address)
-            this.account_number = await this.getAccountNumberFromAccountInfo(data)
+            this.account_number = this.getAccountNumberFromAccountInfo(data)
         }
         return this
     }
@@ -226,10 +242,10 @@ export class OKEXChainClient {
      * @return {Transaction} Transaction object
      */
     async buildTransaction(msg, signMsg, memo = "", fee = null , sequenceNumber = null) {
-        if ((!this.account_number || !sequenceNumber)) {
+        if (!sequenceNumber) {
             const accountInfo = await this.getAccount()
-            sequenceNumber = await this.getSequenceNumberFromAccountInfo(accountInfo)
-            this.account_number = await this.getAccountNumberFromAccountInfo(accountInfo)
+            sequenceNumber = this.getSequenceNumberFromAccountInfo(accountInfo)
+            this.account_number = this.getAccountNumberFromAccountInfo(accountInfo)
         }
 
         const params = {
@@ -242,7 +258,13 @@ export class OKEXChainClient {
         }
 
         const tx = new Transaction(params)
-        return tx.sign(this.privateKey, signMsg)
+
+        if (this.signer) {
+            return await tx.sign(this.signer, signMsg, this.address);
+        }
+        else {
+            return tx.sign(this.privateKey, signMsg)
+        }
     }
 
     /**
@@ -323,7 +345,7 @@ export class OKEXChainClient {
      * @param {String} accountInfo
      * @return {Number} sequenceNumber
      */
-    async getSequenceNumberFromAccountInfo(accountInfo) {
+    getSequenceNumberFromAccountInfo(accountInfo) {
         return accountInfo.result.value.sequence
     }
 
@@ -332,7 +354,7 @@ export class OKEXChainClient {
      * @param {String} accountInfo
      * @return {Number} accountNumber
      */
-    async getAccountNumberFromAccountInfo(accountInfo) {
+    getAccountNumberFromAccountInfo(accountInfo) {
         return accountInfo.result.value.account_number
     }
 
